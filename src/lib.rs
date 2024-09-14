@@ -1,97 +1,47 @@
 use std::{
-    sync::{mpsc, Arc, Mutex},
-    thread,
+    fs,
+    io::{BufRead, BufReader, Write},
+    net::{TcpListener, TcpStream},
 };
 
-type Job = Box<dyn FnOnce() + Send + 'static>;
-type JobReceiver = Arc<Mutex<mpsc::Receiver<Job>>>;
-pub struct Worker {
-    id: usize,
-    thread: Option<thread::JoinHandle<()>>,
-}
+mod http;
+mod threadpool;
+use http::parse_http;
+use threadpool::ThreadPool;
 
-impl Worker {
-    fn new(id: usize, receiver: JobReceiver) -> Worker {
-        let thread = thread::spawn(move || loop {
-            // Call to recv blocks until job is passed
-            // lock ensures only one worker is waiting for a job at a given moment
-            // mutex guard is implicitly dropped after at the end of this statement as it is not the final value
-            // recv returns Err when sender is dropped in cleanup
-            let message = receiver.lock().expect("Mutex Poisoned").recv();
+pub fn start_server(host: &'static str, port: &'static str) {
+    let address = format!("{host}:{port}");
+    let listener = TcpListener::bind(address.clone()).expect("Port Should Bind");
 
-            match message {
-                Ok(job) => {
-                    println!("Worker {id} got a job; executing.");
+    println!("\n\nServer Now Running on http://{}", address);
 
-                    job();
-                }
-                Err(_) => {
-                    println!("Worker {id} disconnected; shutting down.");
-                    break;
-                }
-            }
+    let pool = ThreadPool::new(4);
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+
+        pool.execute(|| {
+            handle_connection(stream);
         });
-
-        Worker {
-            id,
-            thread: Some(thread),
-        }
-    }
-}
-
-pub struct ThreadPool {
-    workers: Vec<Worker>,
-    sender: Option<mpsc::Sender<Job>>,
-}
-
-impl ThreadPool {
-    /// Create a ThreadPool
-    ///
-    /// The size is the number of threads
-    ///
-    /// # Panics
-    ///
-    /// The `new` function will panic if the size is zero
-    pub fn new(size: usize) -> ThreadPool {
-        assert!(size > 0);
-
-        let (sender, receiver) = mpsc::channel();
-
-        let receiver = Arc::new(Mutex::new(receiver));
-
-        let mut workers = Vec::with_capacity(size);
-
-        for id in 0..size {
-            workers.push(Worker::new(id, Arc::clone(&receiver)))
-        }
-
-        ThreadPool {
-            workers,
-            sender: Some(sender),
-        }
     }
 
-    pub fn execute<F>(&self, f: F)
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        let job = Box::new(f);
-
-        self.sender.as_ref().unwrap().send(job).unwrap();
-    }
+    // should never run correct?
+    println!("Shutting Down");
 }
 
-impl Drop for ThreadPool {
-    fn drop(&mut self) {
-        drop(self.sender.take());
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader: BufReader<&mut TcpStream> = BufReader::new(&mut stream);
+    let request_line = buf_reader.lines().next().unwrap().unwrap();
 
-        for worker in &mut self.workers {
-            println!("Shutting down worker {}", worker.id);
+    let (status_line, filename) = parse_http(&request_line);
 
-            // Take ignores the None option and does nothing here, no cleanup required
-            if let Some(thread) = worker.thread.take() {
-                thread.join().unwrap();
-            }
-        }
-    }
+    let contents = fs::read_to_string(filename).unwrap();
+    let length = contents.len();
+
+    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+
+    stream.write_all(response.as_bytes()).unwrap();
 }
+
+#[cfg(test)]
+mod tests {}
