@@ -21,7 +21,7 @@ fn main() {
     }
 
     // should never run correct?
-    println!("No more connections");
+    println!("Shutting Down");
 }
 
 fn handle_connection(mut stream: TcpStream) {

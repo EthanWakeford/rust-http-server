@@ -3,37 +3,46 @@ use std::{
     thread,
 };
 
+type Job = Box<dyn FnOnce() + Send + 'static>;
 type JobReceiver = Arc<Mutex<mpsc::Receiver<Job>>>;
 pub struct Worker {
     id: usize,
-    thread: thread::JoinHandle<JobReceiver>,
+    thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Worker {
     fn new(id: usize, receiver: JobReceiver) -> Worker {
-        // let thread = thread::spawn(|| {receiver});
-
         let thread = thread::spawn(move || loop {
             // Call to recv blocks until job is passed
             // lock ensures only one worker is waiting for a job at a given moment
             // mutex guard is implicitly dropped after at the end of this statement as it is not the final value
-            let job = receiver.lock().expect("Mutex Poisoned").recv().unwrap();
+            // recv returns Err when sender is dropped in cleanup
+            let message = receiver.lock().expect("Mutex Poisoned").recv();
 
-            println!("Worker {id} got a job; executing.");
+            match message {
+                Ok(job) => {
+                    println!("Worker {id} got a job; executing.");
 
-            job();
+                    job();
+                }
+                Err(_) => {
+                    println!("Worker {id} disconnected; shutting down.");
+                    break;
+                }
+            }
         });
 
-        Worker { id, thread }
+        Worker {
+            id,
+            thread: Some(thread),
+        }
     }
 }
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Job>,
+    sender: Option<mpsc::Sender<Job>>,
 }
-
-type Job = Box<dyn FnOnce() + Send + 'static>;
 
 impl ThreadPool {
     /// Create a ThreadPool
@@ -56,7 +65,10 @@ impl ThreadPool {
             workers.push(Worker::new(id, Arc::clone(&receiver)))
         }
 
-        ThreadPool { workers, sender }
+        ThreadPool {
+            workers,
+            sender: Some(sender),
+        }
     }
 
     pub fn execute<F>(&self, f: F)
@@ -65,6 +77,21 @@ impl ThreadPool {
     {
         let job = Box::new(f);
 
-        self.sender.send(job).unwrap();
+        self.sender.as_ref().unwrap().send(job).unwrap();
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+
+        for worker in &mut self.workers {
+            println!("Shutting down worker {}", worker.id);
+
+            // Take ignores the None option and does nothing here, no cleanup required
+            if let Some(thread) = worker.thread.take() {
+                thread.join().unwrap();
+            }
+        }
     }
 }
