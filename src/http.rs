@@ -1,9 +1,16 @@
 use std::{
     io::{BufRead, BufReader},
     net::TcpStream,
-    thread,
-    time::Duration,
 };
+
+pub enum Method {
+    GET,
+}
+
+pub struct RouteConfig {
+    pub method: Method,
+    pub route: &'static str,
+}
 
 fn _print_request(buf_reader: BufReader<&mut TcpStream>) {
     let http_request: Vec<_> = buf_reader
@@ -15,13 +22,14 @@ fn _print_request(buf_reader: BufReader<&mut TcpStream>) {
     println!("Request: {http_request:#?}");
 }
 
-pub fn parse_http(request_line: &String) -> (&str, &str) {
-    match &request_line[..] {
-        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "index.html"),
-        "GET /sleep HTTP/1.1" => {
-            thread::sleep(Duration::from_secs(5));
-            ("HTTP/1.1 200 OK", "index.html")
+pub fn parse_http<'a>(request_line: &String, config: &RouteConfig) -> (&'a str, &'a str) {
+    match config.method {
+        Method::GET => {
+            if &request_line[..] == format!("GET {} HTTP/1.1", config.route) {
+                ("HTTP/1.1 200 OK", "index.html")
+            } else {
+                ("HTTP/1.1 404 NOT FOUND", "404.html")
+            }
         }
-        _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
     }
 }

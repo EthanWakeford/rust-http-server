@@ -2,14 +2,16 @@ use std::{
     fs,
     io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
+    sync::Arc,
 };
 
 mod http;
 mod threadpool;
 use http::parse_http;
+pub use http::{Method, RouteConfig};
 use threadpool::ThreadPool;
 
-pub fn start_server(host: &'static str, port: &'static str) {
+pub fn start_server(host: &'static str, port: &'static str, config: RouteConfig) {
     let address = format!("{host}:{port}");
     let listener = TcpListener::bind(address.clone()).expect("Port Should Bind");
 
@@ -17,11 +19,15 @@ pub fn start_server(host: &'static str, port: &'static str) {
 
     let pool = ThreadPool::new(4);
 
+    let config = Arc::new(config);
+
     for stream in listener.incoming() {
+        let config = Arc::clone(&config);
+
         let stream = stream.unwrap();
 
-        pool.execute(|| {
-            handle_connection(stream);
+        pool.execute(move || {
+            handle_connection(stream, config);
         });
     }
 
@@ -29,11 +35,11 @@ pub fn start_server(host: &'static str, port: &'static str) {
     println!("Shutting Down");
 }
 
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(mut stream: TcpStream, config: Arc<RouteConfig>) {
     let buf_reader: BufReader<&mut TcpStream> = BufReader::new(&mut stream);
     let request_line = buf_reader.lines().next().unwrap().unwrap();
 
-    let (status_line, filename) = parse_http(&request_line);
+    let (status_line, filename) = parse_http(&request_line, &config);
 
     let contents = fs::read_to_string(filename).unwrap();
     let length = contents.len();
