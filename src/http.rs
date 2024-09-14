@@ -7,9 +7,15 @@ pub enum Method {
     GET,
 }
 
+// pub enum RouteHandler {
+//     File(&'static str),
+//     Controller(fn() -> String),
+// }
+
 pub struct RouteConfig {
     pub method: Method,
     pub route: &'static str,
+    pub file: &'static str,
 }
 
 fn _print_request(buf_reader: BufReader<&mut TcpStream>) {
@@ -26,7 +32,7 @@ pub fn parse_http<'a>(request_line: &String, config: &RouteConfig) -> (&'a str, 
     match config.method {
         Method::GET => {
             if &request_line[..] == format!("GET {} HTTP/1.1", config.route) {
-                ("HTTP/1.1 200 OK", "index.html")
+                ("HTTP/1.1 200 OK", config.file)
             } else {
                 ("HTTP/1.1 404 NOT FOUND", "404.html")
             }

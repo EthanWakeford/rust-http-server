@@ -41,7 +41,13 @@ fn handle_connection(mut stream: TcpStream, config: Arc<RouteConfig>) {
 
     let (status_line, filename) = parse_http(&request_line, &config);
 
-    let contents = fs::read_to_string(filename).unwrap();
+    let contents = match fs::read_to_string(filename) {
+        Ok(c) => c,
+        Err(err) => {
+            eprintln!("Error reading file: {} at \"{}\"", err, config.file);
+            "HTTP/1.1 500 Internal Server Error".to_string()
+        }
+    };
     let length = contents.len();
 
     let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
