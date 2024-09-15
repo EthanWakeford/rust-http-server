@@ -11,7 +11,7 @@ use http::parse_http;
 pub use http::{Method, RouteConfig};
 use threadpool::ThreadPool;
 
-pub fn start_server(host: &'static str, port: &'static str, config: RouteConfig) {
+pub fn start_server(config: Vec<RouteConfig>, host: &'static str, port: &'static str) {
     let address = format!("{host}:{port}");
     let listener = TcpListener::bind(address.clone()).expect("Port Should Bind");
 
@@ -35,7 +35,7 @@ pub fn start_server(host: &'static str, port: &'static str, config: RouteConfig)
     println!("Shutting Down");
 }
 
-fn handle_connection(mut stream: TcpStream, config: Arc<RouteConfig>) {
+fn handle_connection(mut stream: TcpStream, config: Arc<Vec<RouteConfig>>) {
     let buf_reader: BufReader<&mut TcpStream> = BufReader::new(&mut stream);
     let request_line = buf_reader.lines().next().unwrap().unwrap();
 
@@ -44,7 +44,7 @@ fn handle_connection(mut stream: TcpStream, config: Arc<RouteConfig>) {
     let contents = match fs::read_to_string(filename) {
         Ok(c) => c,
         Err(err) => {
-            eprintln!("Error reading file: {} at \"{}\"", err, config.file);
+            eprintln!("Error reading file: {} at \"{}\"", err, filename);
             "HTTP/1.1 500 Internal Server Error".to_string()
         }
     };
