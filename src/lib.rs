@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs,
     io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
@@ -11,7 +12,11 @@ use http::parse_http;
 pub use http::{Method, RouteConfig};
 use threadpool::ThreadPool;
 
-pub fn start_server(config: Vec<RouteConfig>, host: &'static str, port: &'static str) {
+pub fn start_server(
+    config: HashMap<&'static str, RouteConfig>,
+    host: &'static str,
+    port: &'static str,
+) {
     let address = format!("{host}:{port}");
     let listener = TcpListener::bind(address.clone()).expect("Port Should Bind");
 
@@ -40,7 +45,7 @@ pub fn start_server(config: Vec<RouteConfig>, host: &'static str, port: &'static
     println!("Shutting Down");
 }
 
-fn handle_connection(mut stream: TcpStream, config: Arc<Vec<RouteConfig>>) {
+fn handle_connection(mut stream: TcpStream, config: Arc<HashMap<&str, RouteConfig>>) {
     let buf_reader: BufReader<&mut TcpStream> = BufReader::new(&mut stream);
     let request_line = buf_reader
         .lines()

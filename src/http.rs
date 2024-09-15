@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{BufRead, BufReader},
     net::TcpStream,
 };
@@ -12,10 +13,9 @@ pub enum Method {
 //     Controller(fn() -> String),
 // }
 
-// TODO: turn into hashmap
 pub struct RouteConfig {
     pub method: Method,
-    pub route: &'static str,
+    // pub route: &'static str,
     pub file: &'static str,
 }
 
@@ -29,19 +29,37 @@ fn _print_request(buf_reader: BufReader<&mut TcpStream>) {
     println!("Request: {http_request:#?}");
 }
 
-pub fn parse_http<'a>(request_line: &String, config: &Vec<RouteConfig>) -> (&'a str, &'a str) {
+pub fn parse_http<'a>(
+    request_line: &String,
+    config: &HashMap<&str, RouteConfig>,
+) -> (&'a str, &'a str) {
     let mut request = request_line[..].split_whitespace();
     let method = request.next().unwrap();
     let route = request.next().unwrap();
 
-    for route_config in config {
-        match route_config.method {
-            Method::GET => {
-                if method == "GET" && route == route_config.route {
-                    return ("HTTP/1.1 200 OK", route_config.file);
-                }
+    match match_route(config, method, route) {
+        Some(route_config) => ("HTTP/1.1 200 OK", route_config.file),
+        None => ("HTTP/1.1 404 NOT FOUND", "404.html"),
+    }
+}
+
+fn match_route<'a>(
+    config: &'a HashMap<&str, RouteConfig>,
+    method: &str,
+    route: &str,
+) -> Option<&'a RouteConfig> {
+    match config.get(route) {
+        Some(route_config) => {
+            let config_method = match route_config.method {
+                Method::GET => "GET",
+            };
+
+            if config_method == method {
+                Some(route_config)
+            } else {
+                None
             }
         }
+        None => None,
     }
-    return ("HTTP/1.1 404 NOT FOUND", "404.html");
 }
