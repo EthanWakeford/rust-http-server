@@ -9,11 +9,11 @@ use std::{
 mod http;
 mod threadpool;
 use http::parse_http;
-pub use http::{Method, RouteConfig};
+pub use http::{Method, RouteConfig, RouteKey};
 use threadpool::ThreadPool;
 
 pub fn start_server(
-    config: HashMap<&'static str, RouteConfig>,
+    config: HashMap<RouteKey, RouteConfig>,
     host: &'static str,
     port: &'static str,
 ) {
@@ -45,7 +45,7 @@ pub fn start_server(
     println!("Shutting Down");
 }
 
-fn handle_connection(mut stream: TcpStream, config: Arc<HashMap<&str, RouteConfig>>) {
+fn handle_connection(mut stream: TcpStream, config: Arc<HashMap<RouteKey, RouteConfig>>) {
     let buf_reader: BufReader<&mut TcpStream> = BufReader::new(&mut stream);
     let request_line = buf_reader
         .lines()
