@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rust_http_server::{start_server, Method, RouteConfig, RouteKey};
 
 fn main() {
-    let config: HashMap<RouteKey, RouteConfig> = HashMap::from([
+    let config: HashMap<RouteKey<'static>, RouteConfig> = HashMap::from([
         (
             RouteKey("/", Method::GET),
             RouteConfig {

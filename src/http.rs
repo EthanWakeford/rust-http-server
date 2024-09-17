@@ -17,7 +17,6 @@ impl FromStr for Method {
         match method {
             "GET" => Ok(Method::GET),
             "POST" => Ok(Method::POST),
-            // Add more methods here
             _ => Err(format!(
                 "Error Parsing HTTP Request Message: Method Not Implemented: {}",
                 method
@@ -38,7 +37,7 @@ pub struct RouteConfig {
 }
 
 #[derive(Eq, Hash, PartialEq)]
-pub struct RouteKey(pub &'static str, pub Method);
+pub struct RouteKey<'a>(pub &'a str, pub Method);
 
 fn _print_request(buf_reader: BufReader<&mut TcpStream>) {
     let http_request: Vec<_> = buf_reader
@@ -68,10 +67,8 @@ pub fn parse_http<'a>(
         }
     };
 
-    let key = RouteKey(route, method);
-    match config.get(&key) {
+    match config.get(&RouteKey(route, method)) {
         Some(route_config) => ("HTTP/1.1 200 OK", route_config.file),
         None => notfound,
     }
-    // notfound
 }

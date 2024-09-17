@@ -13,7 +13,7 @@ pub use http::{Method, RouteConfig, RouteKey};
 use threadpool::ThreadPool;
 
 pub fn start_server(
-    config: HashMap<RouteKey, RouteConfig>,
+    config: HashMap<RouteKey<'static>, RouteConfig>,
     host: &'static str,
     port: &'static str,
 ) {
