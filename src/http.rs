@@ -5,8 +5,6 @@ use std::{
     str::FromStr,
 };
 
-use crate::render_file;
-
 #[derive(Eq, Hash, PartialEq)]
 pub enum Method {
     GET,
