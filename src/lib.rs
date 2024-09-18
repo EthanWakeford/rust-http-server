@@ -53,14 +53,12 @@ fn handle_connection(mut stream: TcpStream, config: Arc<HashMap<RouteKey, RouteC
         .expect("Request should not be empty")
         .expect("Should be able to parse message");
 
-    let (status_line, filename) = parse_http(&request_line, &config);
+    let (status_line, response) = match parse_http(&request_line, &config) {
+        Some(route_config) => ("HTTP/1.1 200 OK", (route_config.controller)()),
+        None => ("HTTP/1.1 404 NOT FOUND", render_file("404.html")()),
+    };
 
-    let contents = fs::read_to_string(filename).unwrap_or_else(|err| {
-        eprintln!("Error reading file: {} at \"{}\"", err, filename);
-        "HTTP/1.1 500 Internal Server Error".to_string()
-    });
-
-    send_response(stream, status_line, contents);
+    send_response(stream, status_line, response);
 }
 
 fn send_response(mut stream: TcpStream, status_line: &str, contents: String) {
@@ -72,6 +70,19 @@ fn send_response(mut stream: TcpStream, status_line: &str, contents: String) {
     stream
         .write_all(response.as_bytes())
         .expect("Writing to stream should not fail");
+}
+
+pub fn render_file(filename: &str) -> Box<impl Fn() -> String + '_> {
+    Box::new(move || {
+        fs::read_to_string(filename).unwrap_or_else(|err| {
+            eprintln!("Error reading file: {} at \"{}\"", err, filename);
+            "HTTP/1.1 500 Internal Server Error".to_string()
+        })
+    })
+}
+
+pub fn make_response(message: &str) -> Box<impl Fn() -> String + '_> {
+    Box::new(move || message.to_string())
 }
 
 #[cfg(test)]

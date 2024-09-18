@@ -1,19 +1,25 @@
 use std::collections::HashMap;
 
-use rust_http_server::{start_server, Method, RouteConfig, RouteKey};
+use rust_http_server::{make_response, render_file, start_server, Method, RouteConfig, RouteKey};
 
 fn main() {
-    let config: HashMap<RouteKey<'static>, RouteConfig> = HashMap::from([
+    let config = HashMap::from([
+        (
+            RouteKey("/rest", Method::GET),
+            RouteConfig {
+                controller: make_response("Hello world this is my rest api"),
+            },
+        ),
         (
             RouteKey("/", Method::GET),
             RouteConfig {
-                file: ("index.html"),
+                controller: render_file("index.html"),
             },
         ),
         (
             RouteKey("/other", Method::GET),
             RouteConfig {
-                file: ("other.html"),
+                controller: render_file("other.html"),
             },
         ),
     ]);

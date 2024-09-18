@@ -5,6 +5,8 @@ use std::{
     str::FromStr,
 };
 
+use crate::render_file;
+
 #[derive(Eq, Hash, PartialEq)]
 pub enum Method {
     GET,
@@ -25,15 +27,8 @@ impl FromStr for Method {
     }
 }
 
-// pub enum RouteHandler {
-//     File(&'static str),
-//     Controller(fn() -> String),
-// }
-
 pub struct RouteConfig {
-    // pub method: Method,
-    // pub route: &'static str,
-    pub file: &'static str,
+    pub controller: Box<dyn Fn() -> String + Sync + Send>,
 }
 
 #[derive(Eq, Hash, PartialEq)]
@@ -52,23 +47,22 @@ fn _print_request(buf_reader: BufReader<&mut TcpStream>) {
 pub fn parse_http<'a>(
     request_line: &'a String,
     config: &'a HashMap<RouteKey, RouteConfig>,
-) -> (&'a str, &'a str) {
+) -> Option<&'a RouteConfig> {
     // dbg!(request_line);
     let mut request = request_line[..].split_whitespace();
     let method = request.next().unwrap();
     let route = request.next().unwrap();
-    let notfound = ("HTTP/1.1 404 NOT FOUND", "404.html");
 
     let method = match method.parse::<Method>() {
         Ok(method) => method,
         Err(err) => {
             eprintln!("{}", err);
-            return notfound;
+            return None;
         }
     };
 
     match config.get(&RouteKey(route, method)) {
-        Some(route_config) => ("HTTP/1.1 200 OK", route_config.file),
-        None => notfound,
+        Some(route_config) => Some(route_config),
+        None => None,
     }
 }
