@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Lines},
     net::TcpStream,
     str::FromStr,
 };
@@ -26,7 +26,7 @@ impl FromStr for Method {
 }
 
 pub struct RouteConfig {
-    pub controller: Box<dyn Fn(&String) -> String + Sync + Send>,
+    pub controller: Box<dyn Fn(&String, Vec<String>, Vec<String>) -> String + Sync + Send>,
 }
 
 #[derive(Eq, Hash, PartialEq)]
@@ -42,7 +42,88 @@ fn _print_request(buf_reader: BufReader<&mut TcpStream>) {
     println!("Request: {http_request:#?}");
 }
 
-pub fn parse_http<'a>(
+pub fn parse_request(
+    mut request: Lines<BufReader<&mut TcpStream>>,
+) -> (String, Vec<String>, Vec<String>) {
+    let request_line = request
+        .next()
+        .expect("Request should not be empty")
+        .expect("Should be able to parse message");
+
+    let mut headers = Vec::new();
+    let mut body = Vec::new();
+    let mut header_finished = false;
+
+    // loop {
+    //     match request.next() {
+    //         None => break,
+    //         Some(line) => {
+    //             println!("looping");
+    //             if !header_finished {
+    //                 println!("in header");
+    //                 // Can't for the life of me figure out why this would be error
+    //                 let header = line.expect("Should be able to unwrap Headers");
+
+    //                 // headers end when empty entry
+    //                 if header.is_empty() {
+    //                     println!("header is empty");
+    //                     // break;
+    //                     header_finished = true;
+    //                     // continue;
+    //                 } else {
+    //                     println!("header pushed");
+    //                     headers.push(header);
+    //                 }
+    //             } else {
+    //                 println!("in body");
+    //                 let body_line = line.expect("Should be able to unwrap body");
+
+    //                 body.push(body_line);
+    //             }
+    //             println!("end of loop");
+    //         }
+    //     }
+    // }
+
+    while let Some(line) = request.next() {
+        println!("looping");
+        if !header_finished {
+            println!("in header");
+            // Can't for the life of me figure out why this would be error
+            let header = line.expect("Should be able to unwrap Headers");
+
+            // headers end when empty entry
+            if header.is_empty() {
+                println!("header is empty");
+                // break;
+                header_finished = true;
+                // continue;
+            } else {
+                println!("header pushed");
+                headers.push(header);
+            }
+        } else {
+            println!("in body");
+            let body_line = line.expect("Should be able to unwrap body");
+
+            body.push(body_line);
+        }
+        println!("end of loop");
+    }
+
+    // println!("creating body");
+    // while let Some(body_line) = request.next() {
+    // println!("in body");
+    // let body_line = body_line.expect("Should be able to unwrap body");
+    //
+    // body.push(body_line);
+    // }
+
+    println!("returning");
+    (request_line, headers, body)
+}
+
+pub fn match_controller<'a>(
     request_line: &'a String,
     config: &'a HashMap<RouteKey, RouteConfig>,
 ) -> Option<&'a RouteConfig> {

@@ -33,11 +33,25 @@ fn main() {
                 controller: Box::new(x),
             },
         ),
+        (
+            RouteKey("/read_request", Method::POST),
+            RouteConfig {
+                controller: Box::new(read_request),
+            },
+        ),
     ]);
 
     start_server(config, "127.0.0.1", "7878");
 }
 
-fn x<'a>(_: &'a String) -> String {
+fn x<'a>(_: &'a String, _: Vec<String>, _: Vec<String>) -> String {
     "blah blah".to_string()
+}
+
+fn read_request(request: &String, headers: Vec<String>, body: Vec<String>) -> String {
+    let response = format!(
+        "Request: {request}\n Headers:{:?}\n Body:{:?}",
+        headers, body
+    );
+    response
 }

@@ -8,7 +8,7 @@ use std::{
 
 mod http;
 mod threadpool;
-use http::parse_http;
+use http::{match_controller, parse_request};
 pub use http::{Method, RouteConfig, RouteKey};
 use threadpool::ThreadPool;
 
@@ -47,17 +47,19 @@ pub fn start_server(
 
 fn handle_connection(mut stream: TcpStream, config: Arc<HashMap<RouteKey, RouteConfig>>) {
     let buf_reader: BufReader<&mut TcpStream> = BufReader::new(&mut stream);
-    let request_line = buf_reader
-        .lines()
-        .next()
-        .expect("Request should not be empty")
-        .expect("Should be able to parse message");
+    let request = buf_reader.lines();
 
-    let (status_line, response) = match parse_http(&request_line, &config) {
-        Some(route_config) => ("HTTP/1.1 200 OK", (route_config.controller)(&request_line)),
+    let (request_line, headers, body) = parse_request(request);
+    println!("we finished parsing");
+
+    let (status_line, response) = match match_controller(&request_line, &config) {
+        Some(route_config) => (
+            "HTTP/1.1 200 OK",
+            (route_config.controller)(&request_line, headers, body),
+        ),
         None => (
             "HTTP/1.1 404 NOT FOUND",
-            render_file("404.html")(&request_line),
+            render_file("404.html")(&request_line, headers, body),
         ),
     };
 
@@ -75,8 +77,10 @@ fn send_response(mut stream: TcpStream, status_line: &str, contents: String) {
         .expect("Writing to stream should not fail");
 }
 
-pub fn render_file<'a>(filename: &'a str) -> Box<impl Fn(&String) -> String + 'a> {
-    Box::new(move |_: &String| {
+pub fn render_file<'a>(
+    filename: &'a str,
+) -> Box<impl Fn(&String, Vec<String>, Vec<String>) -> String + 'a> {
+    Box::new(move |_: &String, _: Vec<String>, _: Vec<String>| {
         fs::read_to_string(filename).unwrap_or_else(|err| {
             eprintln!("Error reading file: {} at \"{}\"", err, filename);
             "HTTP/1.1 500 Internal Server Error".to_string()
@@ -84,8 +88,10 @@ pub fn render_file<'a>(filename: &'a str) -> Box<impl Fn(&String) -> String + 'a
     })
 }
 
-pub fn make_response<'a>(message: &'a str) -> Box<impl Fn(&String) -> String + 'a> {
-    Box::new(move |_: &String| message.to_string())
+pub fn make_response<'a>(
+    message: &'a str,
+) -> Box<impl Fn(&String, Vec<String>, Vec<String>) -> String + 'a> {
+    Box::new(move |_: &String, _: Vec<String>, _: Vec<String>| message.to_string())
 }
 
 #[cfg(test)]
