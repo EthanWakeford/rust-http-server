@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, Lines},
+    io::{BufRead, BufReader, Error, Read},
     net::TcpStream,
     str::FromStr,
 };
@@ -26,101 +26,58 @@ impl FromStr for Method {
 }
 
 pub struct RouteConfig {
-    pub controller: Box<dyn Fn(&String, Vec<String>, Vec<String>) -> String + Sync + Send>,
+    pub controller: Box<dyn Fn(&String, Vec<String>, String) -> String + Sync + Send>,
 }
 
 #[derive(Eq, Hash, PartialEq)]
 pub struct RouteKey<'a>(pub &'a str, pub Method);
 
-fn _print_request(buf_reader: BufReader<&mut TcpStream>) {
-    let http_request: Vec<_> = buf_reader
-        .lines()
-        .map(|result| result.unwrap())
-        .take_while(|line| !line.is_empty())
-        .collect();
-
-    println!("Request: {http_request:#?}");
-}
-
 pub fn parse_request(
-    mut request: Lines<BufReader<&mut TcpStream>>,
-) -> (String, Vec<String>, Vec<String>) {
-    let request_line = request
-        .next()
-        .expect("Request should not be empty")
-        .expect("Should be able to parse message");
-
+    mut buf_reader: BufReader<&mut TcpStream>,
+) -> Result<(String, Vec<String>, String), Error> {
+    let mut request_line = String::new();
     let mut headers = Vec::new();
-    let mut body = Vec::new();
-    let mut header_finished = false;
+    let mut body = String::new();
 
-    // loop {
-    //     match request.next() {
-    //         None => break,
-    //         Some(line) => {
-    //             println!("looping");
-    //             if !header_finished {
-    //                 println!("in header");
-    //                 // Can't for the life of me figure out why this would be error
-    //                 let header = line.expect("Should be able to unwrap Headers");
+    buf_reader.read_line(&mut request_line)?;
 
-    //                 // headers end when empty entry
-    //                 if header.is_empty() {
-    //                     println!("header is empty");
-    //                     // break;
-    //                     header_finished = true;
-    //                     // continue;
-    //                 } else {
-    //                     println!("header pushed");
-    //                     headers.push(header);
-    //                 }
-    //             } else {
-    //                 println!("in body");
-    //                 let body_line = line.expect("Should be able to unwrap body");
+    // Read headers
+    loop {
+        let mut line = String::new();
+        buf_reader.read_line(&mut line)?;
+        let line = line.trim_end().to_string();
 
-    //                 body.push(body_line);
-    //             }
-    //             println!("end of loop");
-    //         }
-    //     }
-    // }
-
-    while let Some(line) = request.next() {
-        println!("looping");
-        if !header_finished {
-            println!("in header");
-            // Can't for the life of me figure out why this would be error
-            let header = line.expect("Should be able to unwrap Headers");
-
-            // headers end when empty entry
-            if header.is_empty() {
-                println!("header is empty");
-                // break;
-                header_finished = true;
-                // continue;
-            } else {
-                println!("header pushed");
-                headers.push(header);
-            }
+        if line.is_empty() {
+            // End of headers
+            break;
         } else {
-            println!("in body");
-            let body_line = line.expect("Should be able to unwrap body");
-
-            body.push(body_line);
+            headers.push(line);
         }
-        println!("end of loop");
     }
 
-    // println!("creating body");
-    // while let Some(body_line) = request.next() {
-    // println!("in body");
-    // let body_line = body_line.expect("Should be able to unwrap body");
-    //
-    // body.push(body_line);
-    // }
+    // Determine Content-Length
+    let content_length = headers
+        .iter()
+        .find_map(|header| {
+            if header.to_lowercase().starts_with("content-length:") {
+                header["content-length:".len()..]
+                    .trim()
+                    .parse::<usize>()
+                    .ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0);
 
-    println!("returning");
-    (request_line, headers, body)
+    // Read body if Content-Length is specified
+    if content_length > 0 {
+        let mut buffer = vec![0; content_length];
+        buf_reader.read_exact(&mut buffer)?;
+        body = String::from_utf8_lossy(&buffer).to_string();
+    }
+
+    Ok((request_line, headers, body))
 }
 
 pub fn match_controller<'a>(

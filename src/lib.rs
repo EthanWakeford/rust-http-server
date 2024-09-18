@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fs,
-    io::{BufRead, BufReader, Write},
+    io::{BufReader, Write},
     net::{TcpListener, TcpStream},
     sync::Arc,
 };
@@ -47,10 +47,14 @@ pub fn start_server(
 
 fn handle_connection(mut stream: TcpStream, config: Arc<HashMap<RouteKey, RouteConfig>>) {
     let buf_reader: BufReader<&mut TcpStream> = BufReader::new(&mut stream);
-    let request = buf_reader.lines();
 
-    let (request_line, headers, body) = parse_request(request);
-    println!("we finished parsing");
+    let (request_line, headers, body) = match parse_request(buf_reader) {
+        Ok((request_line, headers, body)) => (request_line, headers, body),
+        Err(err) => {
+            eprintln!("Error parsing request: {}", err);
+            (String::new(), vec![], String::new())
+        }
+    };
 
     let (status_line, response) = match match_controller(&request_line, &config) {
         Some(route_config) => (
@@ -79,8 +83,8 @@ fn send_response(mut stream: TcpStream, status_line: &str, contents: String) {
 
 pub fn render_file<'a>(
     filename: &'a str,
-) -> Box<impl Fn(&String, Vec<String>, Vec<String>) -> String + 'a> {
-    Box::new(move |_: &String, _: Vec<String>, _: Vec<String>| {
+) -> Box<impl Fn(&String, Vec<String>, String) -> String + 'a> {
+    Box::new(move |_: &String, _: Vec<String>, _: String| {
         fs::read_to_string(filename).unwrap_or_else(|err| {
             eprintln!("Error reading file: {} at \"{}\"", err, filename);
             "HTTP/1.1 500 Internal Server Error".to_string()
@@ -90,8 +94,8 @@ pub fn render_file<'a>(
 
 pub fn make_response<'a>(
     message: &'a str,
-) -> Box<impl Fn(&String, Vec<String>, Vec<String>) -> String + 'a> {
-    Box::new(move |_: &String, _: Vec<String>, _: Vec<String>| message.to_string())
+) -> Box<impl Fn(&String, Vec<String>, String) -> String + 'a> {
+    Box::new(move |_: &String, _: Vec<String>, _: String| message.to_string())
 }
 
 #[cfg(test)]

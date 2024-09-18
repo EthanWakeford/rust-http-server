@@ -44,11 +44,11 @@ fn main() {
     start_server(config, "127.0.0.1", "7878");
 }
 
-fn x<'a>(_: &'a String, _: Vec<String>, _: Vec<String>) -> String {
+fn x(_: &String, _: Vec<String>, _: String) -> String {
     "blah blah".to_string()
 }
 
-fn read_request(request: &String, headers: Vec<String>, body: Vec<String>) -> String {
+fn read_request(request: &String, headers: Vec<String>, body: String) -> String {
     let response = format!(
         "Request: {request}\n Headers:{:?}\n Body:{:?}",
         headers, body
