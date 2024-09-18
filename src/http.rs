@@ -26,7 +26,7 @@ impl FromStr for Method {
 }
 
 pub struct RouteConfig {
-    pub controller: Box<dyn Fn() -> String + Sync + Send>,
+    pub controller: Box<dyn Fn(&String) -> String + Sync + Send>,
 }
 
 #[derive(Eq, Hash, PartialEq)]
